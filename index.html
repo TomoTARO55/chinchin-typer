@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>何を入力しても「ちんちん」になるタイピング</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tone.js CDN for retro dynamic typing sound effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <style>
+    /* Custom animations & terminal styling */
+    @keyframes cursor-blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+    .typing-cursor {
+      display: inline-block;
+      width: 0.55em;
+      height: 1.15em;
+      vertical-align: -0.15em;
+      animation: cursor-blink 0.9s infinite;
+    }
+    /* CRT subtle screen glow */
+    .crt-screen {
+      background: radial-gradient(circle at 50% 50%, #1e1b4b 0%, #09090b 100%);
+      box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.8), 0 0 25px rgba(168, 85, 247, 0.15);
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #18181b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #3f3f46;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #71717a;
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col font-sans select-none antialiased">
+
+  <header class="border-b border-zinc-800 bg-zinc-900/70 backdrop-blur-md px-4 py-3 sticky top-0 z-20">
+    <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center space-x-3">
+        <div class="h-3.5 w-3.5 rounded-full bg-rose-500 animate-pulse"></div>
+        <h1 class="text-lg md:text-xl font-bold tracking-tight bg-gradient-to-r from-pink-400 via-purple-300 to-indigo-400 bg-clip-text text-transparent">
+          無限ちんちんジェネレーター
+        </h1>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700 hidden sm:inline-block">
+          キーボードを適当に叩いてください
+        </span>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex items-center space-x-2 text-sm">
+        <!-- Sound toggle -->
+        <button id="soundToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition">
+          <span id="soundIcon">🔊</span>
+          <span class="text-xs font-medium" id="soundLabel">サウンド ON</span>
+        </button>
+
+        <!-- Copy button -->
+        <button id="copyBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-sm transition active:scale-95 flex items-center space-x-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+          <span>コピー</span>
+        </button>
+
+        <!-- Clear button -->
+        <button id="clearBtn" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-900/60 hover:text-rose-200 border border-zinc-700 text-zinc-300 transition active:scale-95">
+          クリア
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col p-4 md:p-6 max-w-5xl mx-auto w-full">
+    <!-- Configuration toolbar -->
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3 text-xs md:text-sm text-zinc-400 bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80">
+      <!-- Target preset selection -->
+      <div class="flex items-center gap-2">
+        <label for="wordPreset" class="font-medium text-zinc-300">出力フレーズ:</label>
+        <select id="wordPreset" class="bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500">
+          <option value="ちんちん">ちんちん (標準)</option>
+          <option value="チンチン">チンチン (カタカナ)</option>
+          <option value="ち・ん・ち・ん">ち・ん・ち・ん (上品)</option>
+          <option value="チン！">チン！ (電子レンジ)</option>
+          <option value="custom">✏️ カスタム指定...</option>
+        </select>
+        <input id="customInput" type="text" placeholder="好きな言葉" class="hidden bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1 text-zinc-100 w-32 focus:outline-none focus:ring-1 focus:ring-purple-500 text-xs">
+      </div>
+
+      <!-- Stats Counters -->
+      <div class="flex items-center space-x-4">
+        <div>タイプ数: <span id="keystrokeCount" class="font-mono text-purple-400 font-bold">0</span></div>
+        <div>ちんちん回数: <span id="wordCount" class="font-mono text-pink-400 font-bold">0</span></div>
+      </div>
+    </div>
+
+    <!-- Interactive Terminal Screen Container -->
+    <div id="screenContainer" class="flex-1 crt-screen rounded-2xl border border-zinc-800 p-6 md:p-8 flex flex-col justify-between cursor-text relative overflow-hidden transition-all shadow-2xl">
+      <!-- Watermark background decoration -->
+      <div class="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none text-9xl font-extrabold tracking-widest text-white">
+        CHIN
+      </div>
+
+      <!-- Output content holder -->
+      <div id="textOutput" class="relative z-10 font-mono text-2xl md:text-3xl leading-relaxed tracking-wider break-all whitespace-pre-wrap text-pink-100 drop-shadow-[0_0_8px_rgba(244,114,182,0.3)]">
+        <span class="text-zinc-600 text-base md:text-lg block mb-2 select-none" id="placeholderMsg">
+          [ここにフォーカスしてキーボードを思いのままに乱打してください...]
+        </span>
+      </div>
+
+      <!-- Virtual Hidden Input to capture mobile touch keyboard -->
+      <input id="mobileKeyCatcher" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" class="absolute -top-40 opacity-0 pointer-events-none" />
+
+      <!-- Mobile Tap prompt footer -->
+      <div class="mt-4 pt-3 border-t border-zinc-800/60 flex items-center justify-between text-xs text-zinc-500">
+        <span class="flex items-center gap-1.5">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+          連打スタンバイ中
+        </span>
+        <span class="md:hidden text-zinc-400">
+          タップしてスマホキーボードを表示 📱
+        </span>
+      </div>
+    </div>
+
+    <!-- Hidden alert toast notification -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-800 text-zinc-100 border border-zinc-700 px-4 py-2 rounded-full text-xs shadow-xl opacity-0 pointer-events-none transition-all duration-200">
+      コピーしました！
+    </div>
+  </main>
+
+  <script>
+    // State variables
+    let targetString = "ちんちん";
+    let currentIndex = 0;
+    let keystrokes = 0;
+    let soundEnabled = true;
+    let currentOutput = "";
+
+    // DOM Elements
+    const screenContainer = document.getElementById("screenContainer");
+    const textOutput = document.getElementById("textOutput");
+    const placeholderMsg = document.getElementById("placeholderMsg");
+    const keystrokeCountEl = document.getElementById("keystrokeCount");
+    const wordCountEl = document.getElementById("wordCount");
+    const copyBtn = document.getElementById("copyBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const wordPreset = document.getElementById("wordPreset");
+    const customInput = document.getElementById("customInput");
+    const soundToggleBtn = document.getElementById("soundToggleBtn");
+    const soundIcon = document.getElementById("soundIcon");
+    const soundLabel = document.getElementById("soundLabel");
+    const mobileKeyCatcher = document.getElementById("mobileKeyCatcher");
+    const toast = document.getElementById("toast");
+
+    // Initialize Tone.js synth for typewriter sound effect
+    let synth = null;
+    function initSynth() {
+      if (!synth && window.Tone) {
+        try {
+          synth = new Tone.MembraneSynth({
+            pitchDecay: 0.008,
+            octaves: 2,
+            oscillator: { type: "square4" },
+            envelope: {
+              attack: 0.001,
+              decay: 0.05,
+              sustain: 0,
+              release: 0.04
+            }
+          }).toDestination();
+          synth.volume.value = -12;
+        } catch (e) {
+          console.error("Audio error:", e);
+        }
+      }
+    }
+
+    // Play light click sound
+    function playTypingSound() {
+      if (!soundEnabled) return;
+      try {
+        if (Tone.context.state !== "running") {
+          Tone.start();
+        }
+        initSynth();
+        if (synth) {
+          // Subtle pitch variations
+          const pitches = ["C4", "D4", "E4", "G3", "A3"];
+          const randomPitch = pitches[Math.floor(Math.random() * pitches.length)];
+          synth.triggerAttackRelease(randomPitch, "32n");
+        }
+      } catch (err) {
+        // Audio policy ignore
+      }
+    }
+
+    // Show temporary toast notification
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.remove("opacity-0", "translate-y-2");
+      toast.classList.add("opacity-100", "translate-y-0");
+      setTimeout(() => {
+        toast.classList.remove("opacity-100", "translate-y-0");
+        toast.classList.add("opacity-0", "translate-y-2");
+      }, 1800);
+    }
+
+    function triggerNextChar() {
+      if (placeholderMsg) {
+        placeholderMsg.remove();
+      }
+
+      // Next character in circular string
+      const nextChar = targetString[currentIndex % targetString.length];
+      currentOutput += nextChar;
+      currentIndex++;
+      keystrokes++;
+
+      // Update screen text + blinking cursor
+      textOutput.innerHTML = escapeHtml(currentOutput) + '<span class="typing-cursor bg-pink-400"></span>';
+
+      // Update counters
+      keystrokeCountEl.textContent = keystrokes;
+      const count = Math.floor(currentIndex / targetString.length);
+      wordCountEl.textContent = count;
+
+      // Play audio
+      playTypingSound();
+
+      // Auto scroll to bottom
+      screenContainer.scrollTop = screenContainer.scrollHeight;
+    }
+
+    function escapeHtml(string) {
+      return string
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Handle backspace or delete key
+    function handleBackspace() {
+      if (currentOutput.length > 0) {
+        currentOutput = currentOutput.slice(0, -1);
+        currentIndex = Math.max(0, currentIndex - 1);
+        textOutput.innerHTML = escapeHtml(currentOutput) + '<span class="typing-cursor bg-pink-400"></span>';
+        const count = Math.floor(currentIndex / targetString.length);
+        wordCountEl.textContent = count;
+      }
+    }
+
+    // Keydown listener on entire window
+    window.addEventListener("keydown", (e) => {
+      // Don't intercept if user is typing into the custom word input
+      if (document.activeElement === customInput) {
+        return;
+      }
+
+      // Modifier combos (like Ctrl+C, Ctrl+R) pass through
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        return;
+      }
+
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        handleBackspace();
+        return;
+      }
+
+      // Ignore pure modifier presses
+      const ignoredKeys = ["Shift", "Control", "Alt", "Meta", "CapsLock", "Tab", "Escape"];
+      if (ignoredKeys.includes(e.key)) {
+        return;
+      }
+
+      e.preventDefault();
+      triggerNextChar();
+    });
+
+    // Tap on the screen container brings up the virtual keyboard on mobile
+    screenContainer.addEventListener("click", () => {
+      mobileKeyCatcher.focus();
+    });
+
+    mobileKeyCatcher.addEventListener("input", (e) => {
+      triggerNextChar();
+      mobileKeyCatcher.value = ""; // Always reset so mobile keyboard stays active
+    });
+
+    // Preset selector changes
+    wordPreset.addEventListener("change", (e) => {
+      if (e.target.value === "custom") {
+        customInput.classList.remove("hidden");
+        customInput.focus();
+      } else {
+        customInput.classList.add("hidden");
+        targetString = e.target.value;
+        currentIndex = 0;
+      }
+    });
+
+    customInput.addEventListener("input", (e) => {
+      if (e.target.value.trim().length > 0) {
+        targetString = e.target.value;
+      } else {
+        targetString = "ちんちん";
+      }
+      currentIndex = 0;
+    });
+
+    // Sound toggle
+    soundToggleBtn.addEventListener("click", () => {
+      soundEnabled = !soundEnabled;
+      if (soundEnabled) {
+        soundIcon.textContent = "🔊";
+        soundLabel.textContent = "サウンド ON";
+      } else {
+        soundIcon.textContent = "🔇";
+        soundLabel.textContent = "サウンド OFF";
+      }
+    });
+
+    // Clear function
+    clearBtn.addEventListener("click", () => {
+      currentOutput = "";
+      currentIndex = 0;
+      keystrokes = 0;
+      keystrokeCountEl.textContent = "0";
+      wordCountEl.textContent = "0";
+      textOutput.innerHTML = `
+        <span class="text-zinc-600 text-base md:text-lg block mb-2 select-none" id="placeholderMsg">
+          [ここにフォーカスしてキーボードを思いのままに乱打してください...]
+        </span>
+      `;
+    });
+
+    copyBtn.addEventListener("click", () => {
+      if (!currentOutput) {
+        showToast("コピーする文字がありません");
+        return;
+      }
+
+      // Safe clipboard copy using textarea for maximum browser compatibility
+      const tempTextArea = document.createElement("textarea");
+      tempTextArea.value = currentOutput;
+      tempTextArea.style.position = "fixed";
+      tempTextArea.style.opacity = "0";
+      document.body.appendChild(tempTextArea);
+      tempTextArea.select();
+
+      try {
+        const successful = document.execCommand("copy");
+        if (successful) {
+          showToast(`「${currentOutput.slice(0, 10)}${currentOutput.length > 10 ? '...' : ''}」をコピーしました！`);
+        } else {
+          showToast("コピーに失敗しました");
+        }
+      } catch (err) {
+        showToast("クリップボードへのアクセスが拒否されました");
+      } finally {
+        document.body.removeChild(tempTextArea);
+      }
+    });
+  </script>
+</body>
+</html>
